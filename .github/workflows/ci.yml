@@ -20,7 +20,12 @@ jobs:
     # answering while that line is in place, every name lookup in the VM would
     # block, and a job with no limit would sit there until the six hour
     # default ran out.
-    timeout-minutes: 25
+    #
+    # The number is headroom over a run that finishes, not a target: the
+    # authentication phases took the whole thing past 25 minutes and the job
+    # was killed three quarters of the way through a passing integration
+    # test, which reads exactly like a hang and was not one.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
