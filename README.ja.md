@@ -199,7 +199,7 @@ stns:\
 
 比較はマシン側で行います。取得するのはハッシュだけで、**API にパスワードを
 送ることはありません**。`$6$`・`$5$`・`$2b$` が使えます。前 2 つを
-`external/bsd/libstns` が自前で実装しているのは、ここの
+`src/stns_crypt.c` が自前で実装しているのは、ここの
 `crypt(3)` が bcrypt しか読めない一方、STNS のディレクトリはほぼ SHA-512 crypt
 を持っているからです。`login_stns(8)` を参照。
 
@@ -213,7 +213,7 @@ AuthorizedKeysCommandUser nobody
 ```
 
 `nss_stns` や `ldapstns` がインストールするのと同じプログラムで、どのシステム
-でも動かせるので `external/bsd/libstns` にあります。
+でも動かせるので `src/stns_key_wrapper.c` にあります。
 
 ## リロード
 
@@ -260,6 +260,6 @@ BSD-2-Clause です。`parse.y` の字句解析とファイル処理は、すべ
 
 | | |
 | --- | --- |
-| `external/bsd/libstns` | この下にある STNS API クライアント。vendor 済み |
+| `src/stns_*.c` | この下にある STNS API クライアント |
 | [nss_stns](https://github.com/zakinko/nss_stns) | NetBSD・FreeBSD・DragonFly 向け。`nsswitch(5)` モジュール |
 | [ldapstns](https://github.com/zakinko/ldapstns) | macOS 向け。Open Directory の裏の LDAPv3 サーバー |

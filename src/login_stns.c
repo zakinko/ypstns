@@ -30,7 +30,7 @@
  * stns_crypt_check(), because the two systems this family supports cannot do
  * it themselves: crypt(3) here understands bcrypt and nothing else, and the
  * hashes STNS deployments carry are almost always SHA-512 crypt.  See the
- * comment at the top of external/bsd/libstns/src/stns_crypt.c.
+ * comment at the top of src/stns_crypt.c.
  */
 #include <sys/types.h>
 #include <sys/resource.h>

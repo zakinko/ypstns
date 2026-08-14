@@ -9,19 +9,17 @@
 # modes, WARNINGS=Yes.  Run it with make(1); nothing here works with GNU make
 # and nothing needs to.
 #
-# libstns is vendored under external/ rather than being a submodule, and its
-# sources are compiled straight into this program rather than linked as a
-# library.  That keeps the flags - LOCALBASE, STNS_PRODUCT, STNS_CONFDIR - this
-# repository's business rather than the library's, and it keeps a release
-# tarball self-contained, which is what the port needs.  "make vendor"
-# refreshes the copy; see tests/vendor_libstns.sh.
+# The STNS API client - the configuration, the HTTP, the cache, the circuit
+# breaker and the marshalling - is in src/ beside the daemon rather than shared
+# from anywhere.  It was a library for a while and is not one any more: nothing
+# linked it, and an upstream for two programs cost a repository, a manifest and
+# a commit in three places to change one line.  The same code is in nss_stns
+# and in ldapstns, each owning its copy the way a port owns what it builds.
 
 PROG=		ypstns
 SRCS=		ypstns.c parse.y stnsclient.c maps.c yp.c yp_xdr.c
 MAN=		ypstns.8 ypstns.conf.5 login_stns.8 stns-key-wrapper.8
 
-LIBSTNS=	${.CURDIR}/external/bsd/libstns
-LIBSTNS_SRC?=	${.CURDIR}/../libstns
 PARSON=		${.CURDIR}/external/mit/parson
 TOMLC99=	${.CURDIR}/external/mit/tomlc99
 LOCALBASE?=	/usr/local
@@ -41,17 +39,15 @@ WRAPPERDIR?=	${LOCALBASE}/bin
 EXAMPLESDIR?=	${LOCALBASE}/share/examples/ypstns
 RCDIR?=		/etc/rc.d
 
-# The library's sources, compiled here.
+# The API client, which lives here rather than anywhere shared.
 SRCS+=		stns_config.c stns_request.c stns_entry.c stns_lookup.c stns_list.c
 SRCS+=		stns_crypt.c
 SRCS+=		parson.c toml.c
 
 .PATH:		${.CURDIR}/src ${.CURDIR}/man
-.PATH:		${LIBSTNS}/src ${LIBSTNS}/man
 .PATH:		${PARSON} ${TOMLC99}
 
 CFLAGS+=	-I${.CURDIR}/src -I${.OBJDIR} \
-		-I${LIBSTNS}/src \
 		-I${PARSON} \
 		-I${TOMLC99} \
 		-I${LOCALBASE}/include \
@@ -71,9 +67,9 @@ CDIAGFLAGS+=	-Wall -Wextra -Wstrict-prototypes -Wmissing-prototypes \
 LDADD+=		-L${LOCALBASE}/lib -lcurl -lutil
 DPADD+=		${LIBUTIL}
 
-# bsd.prog.mk knows how to build exactly one program, and there are two here.
-# The second is tiny, shares every object the first uses, and is the same
-# program nss_stns and ldapstns install - so rather than a subdirectory and a
+# bsd.prog.mk knows how to build exactly one program, and there are three here.
+# The others are tiny, share every object the first uses, and one of them is
+# the same program nss_stns and ldapstns install - so rather than a subdirectory and a
 # bsd.subdir.mk for the sake of one link line, it is hung off all: and
 # install: below.
 WRAPPER=	stns-key-wrapper
@@ -89,12 +85,12 @@ all: ${WRAPPER} ${LOGIN}
 
 ${WRAPPER}:
 	${CC} ${CFLAGS} ${CDIAGFLAGS} -o ${.TARGET} \
-		${LIBSTNS}/src/stns_key_wrapper.c \
-		${LIBSTNS}/src/stns_config.c \
-		${LIBSTNS}/src/stns_request.c \
-		${LIBSTNS}/src/stns_entry.c \
-		${LIBSTNS}/src/stns_lookup.c \
-		${LIBSTNS}/src/stns_list.c \
+		${.CURDIR}/src/stns_key_wrapper.c \
+		${.CURDIR}/src/stns_config.c \
+		${.CURDIR}/src/stns_request.c \
+		${.CURDIR}/src/stns_entry.c \
+		${.CURDIR}/src/stns_lookup.c \
+		${.CURDIR}/src/stns_list.c \
 		${PARSON}/parson.c \
 		${TOMLC99}/toml.c \
 		${LDADD}
@@ -107,12 +103,12 @@ ${WRAPPER}:
 ${LOGIN}:
 	${CC} ${CFLAGS} ${CDIAGFLAGS} -o ${.TARGET} \
 		${.CURDIR}/src/login_stns.c \
-		${LIBSTNS}/src/stns_config.c \
-		${LIBSTNS}/src/stns_request.c \
-		${LIBSTNS}/src/stns_entry.c \
-		${LIBSTNS}/src/stns_lookup.c \
-		${LIBSTNS}/src/stns_list.c \
-		${LIBSTNS}/src/stns_crypt.c \
+		${.CURDIR}/src/stns_config.c \
+		${.CURDIR}/src/stns_request.c \
+		${.CURDIR}/src/stns_entry.c \
+		${.CURDIR}/src/stns_lookup.c \
+		${.CURDIR}/src/stns_list.c \
+		${.CURDIR}/src/stns_crypt.c \
 		${PARSON}/parson.c \
 		${TOMLC99}/toml.c \
 		${LDADD}
@@ -137,13 +133,32 @@ beforeinstall:
 # The daemon cannot be run here - it needs root, portmap(8) and a domain name -
 # so what "make test" checks is everything below that: the configuration
 # grammar, and the map handling that every lookup goes through.
-test: maps_test ${PROG}
+test: maps_test stns_test stns_crypt_test ${PROG}
 	./maps_test
+	./stns_test
+	./stns_crypt_test
 	sh ${.CURDIR}/tests/check_parse.sh ./${PROG}
 
 maps_test:
 	${CC} ${CFLAGS} ${CDIAGFLAGS} -o ${.TARGET} \
 		${.CURDIR}/tests/maps_test.c ${.CURDIR}/src/maps.c ${LDADD}
+
+# The API client's own tests.  maps_test and check_parse.sh cover what this
+# daemon does with what it fetched; these cover the fetching, and they are the
+# half that is the same in all three STNS clients - so the half no daemon test
+# of any of them exercises directly.
+CLIENT_SRCS=	${.CURDIR}/src/stns_config.c ${.CURDIR}/src/stns_request.c \
+		${.CURDIR}/src/stns_entry.c ${.CURDIR}/src/stns_lookup.c \
+		${.CURDIR}/src/stns_list.c ${.CURDIR}/src/stns_crypt.c \
+		${PARSON}/parson.c ${TOMLC99}/toml.c
+
+stns_test:
+	${CC} ${CFLAGS} ${CDIAGFLAGS} -o ${.TARGET} \
+		${.CURDIR}/tests/stns_test.c ${CLIENT_SRCS} ${LDADD}
+
+stns_crypt_test:
+	${CC} ${CFLAGS} ${CDIAGFLAGS} -o ${.TARGET} \
+		${.CURDIR}/tests/crypt_test.c ${CLIENT_SRCS} ${LDADD}
 
 # Runs an authentication style the way authenticate(3) does, for
 # tests/integration.sh: the interface is file descriptor 3 and there is no
@@ -168,16 +183,13 @@ integration: ${PROG} ${LOGIN} yp_client auth_client
 ident:
 	sh ${.CURDIR}/tests/check_ident.sh
 
-# Check the vendored code under external/ against external/MANIFEST.  Add
+# Check the bundled third party code against external/MANIFEST.  Add
 # --upstream and it also asks github whether the recorded revisions are still
 # current, which needs the network.
 external:
 	sh ${.CURDIR}/tests/check_external.sh
 
-# Refresh the vendored copy of libstns from a checkout of it.
-vendor:
-	sh ${.CURDIR}/tests/vendor_libstns.sh ${LIBSTNS_SRC}
-
-CLEANFILES+=	${WRAPPER} ${LOGIN} maps_test yp_client auth_client
+CLEANFILES+=	${WRAPPER} ${LOGIN} maps_test stns_test stns_crypt_test \
+		yp_client auth_client
 
 .include <bsd.prog.mk>

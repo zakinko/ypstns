@@ -31,7 +31,7 @@ DOMAIN=${DOMAIN:-stnstest}
 PYTHON=${PYTHON:-python3}
 WORK=${WORK:-/tmp/ypstns_integration}
 
-MOCK=$SRCDIR/external/bsd/libstns/tests/mock_stns_server.py
+MOCK=$SRCDIR/tests/mock_stns_server.py
 CLIENT=$SRCDIR/yp_client
 AUTH=$SRCDIR/auth_client
 
@@ -499,7 +499,7 @@ echo "== login_stns =="
 # login(1) and su(1) ever take.
 #
 # The fixture's stnshash carries a real SHA-512 crypt hash of the password
-# below.  The comparison happens in libstns, whose own tests check the hashing
+# below.  The comparison is src/stns_crypt.c, whose own tests check the hashing
 # against published vectors; what is being checked here is the program around
 # it - the back channel, the confinement, and every way of saying no.
 check "the right password is authorized" \

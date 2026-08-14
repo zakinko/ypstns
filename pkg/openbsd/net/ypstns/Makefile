@@ -3,10 +3,10 @@
 # An OpenBSD port for ypstns, laid out the way /usr/ports expects so that it
 # can be dropped into net/ypstns and built there.
 #
-# The distfile is the archive GitHub generates from a tag.  libstns is
-# vendored into the repository under external/ rather than being a submodule,
-# precisely so that this can be an ordinary GH_ port with nothing to explain -
-# a tag tarball carries a submodule's directory and none of its contents.
+# The distfile is the archive GitHub generates from a tag, and this is an
+# ordinary GH_ port.  It could not be while the STNS API client underneath was
+# a submodule: a tag tarball carries a submodule's directory and none of its
+# contents, which would have left the port with nothing to compile.
 
 COMMENT =	serve an STNS directory to OpenBSD as YP
 

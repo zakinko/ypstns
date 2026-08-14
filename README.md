@@ -201,7 +201,7 @@ log in when the directory is unreachable.
 
 The comparison happens on the machine — only the hash is fetched, and the API
 is never sent a password. `$6$`, `$5$` and `$2b$` all work; the first two are
-implemented in `external/bsd/libstns` because `crypt(3)`
+implemented in `src/stns_crypt.c` because `crypt(3)`
 here does bcrypt and nothing else, while STNS directories almost always carry
 SHA-512 crypt. See `login_stns(8)`.
 
@@ -215,7 +215,7 @@ AuthorizedKeysCommandUser nobody
 ```
 
 This is the same program `nss_stns` and `ldapstns` install; it lives in
-`external/bsd/libstns` because every system can run it.
+`src/stns_key_wrapper.c`, because every system can run it.
 
 ## Reloading
 
@@ -261,6 +261,6 @@ shared `parse.y` every OpenBSD daemon has, which is ISC. See `LICENSE`.
 
 | | |
 | --- | --- |
-| `external/bsd/libstns` | the STNS API client underneath this, vendored in |
+| `src/stns_*.c` | the STNS API client underneath this |
 | [nss_stns](https://github.com/zakinko/nss_stns) | the same thing for NetBSD, FreeBSD and DragonFly, as an `nsswitch(5)` module |
 | [ldapstns](https://github.com/zakinko/ldapstns) | the same thing for macOS, as an LDAPv3 server behind Open Directory |

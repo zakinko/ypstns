@@ -10,6 +10,8 @@
 /ypstns
 /stns-key-wrapper
 /maps_test
+/stns_test
+/stns_crypt_test
 /login_stns
 /yp_client
 /auth_client
