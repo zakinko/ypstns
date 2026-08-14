@@ -10,7 +10,9 @@
 /ypstns
 /stns-key-wrapper
 /maps_test
+/login_stns
 /yp_client
+/auth_client
 /parse.c
 /y.tab.h
 /obj

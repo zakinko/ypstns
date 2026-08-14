@@ -1,0 +1,204 @@
+.\"	$SNOWRABBIT: login_stns.8,v $Format:%h %cs %an$ Exp $
+.\"
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\"
+.\" Copyright (c) 2026 zakinko
+.\"
+.Dd August 14, 2026
+.Dt LOGIN_STNS 8
+.Os
+.Sh NAME
+.Nm login_stns
+.Nd authenticate a password against an STNS directory
+.Sh SYNOPSIS
+.Nm
+.Op Fl s Ar service
+.Op Fl v Ar name Ns = Ns Ar value
+.Ar user
+.Op Ar class
+.Sh DESCRIPTION
+.Nm
+is a
+.Xr login.conf 5
+authentication style that checks a password against the hash an
+.Lk https://stns.jp/ STNS
+API server holds for the user.
+.Pp
+.Xr ypstns 8
+answers who somebody is and what they are allowed to be.
+This answers whether a password is theirs, which on
+.Ox
+is a separate question asked through a separate mechanism:
+.Xr login 1 ,
+.Xr su 1 ,
+.Xr sshd 8
+and everything else that authenticates a person calls
+.Xr authenticate 3 ,
+which runs this program and believes what it says.
+Nothing links against it and nothing has to be told about it twice - every
+caller goes the same way.
+.Pp
+It is not run by hand.
+The options are the ones
+.Xr authenticate 3
+passes:
+.Fl s
+selects
+.Cm login ,
+.Cm challenge
+or
+.Cm response ,
+and
+.Fl v
+carries values from
+.Xr login.conf 5 ,
+none of which mean anything here.
+.Sh SETTING IT UP
+Install the style where
+.Xr login 1
+looks for it.
+The path is fixed in libc, and it is outside
+.Ev LOCALBASE ,
+so the port cannot write it and leaves the program under
+.Ev LOCALBASE
+for an administrator to link:
+.Bd -literal -offset indent
+# ln -s /usr/local/libexec/auth/login_stns /usr/libexec/auth/login_stns
+.Ed
+.Pp
+Then add a class to
+.Xr login.conf 5
+and put the users in it:
+.Bd -literal -offset indent
+stns:\e
+	:auth=passwd,stns:\e
+	:tc=default:
+.Ed
+.Pp
+.Cm passwd
+comes first, and the order is the whole of the safety here.
+A local account is answered out of
+.Xr master.passwd 5
+without the API being asked at all, so root can still log in when the API
+server is unreachable - the same reasoning that puts the local files ahead of
+the directory everywhere else in this family.
+.Pp
+Users get the class from the directory or from
+.Xr master.passwd 5 ;
+.Xr ypstns 8
+leaves the class field empty, so a directory user takes
+.Cm default
+unless
+.Xr login.conf 5
+says otherwise.
+To apply the style to everyone, put
+.Cm auth=passwd,stns
+in
+.Cm default
+instead of making a class.
+.Pp
+Check it with
+.Xr su 1 ,
+which is the shortest path that exercises the whole thing:
+.Bd -literal -offset indent
+$ su -l alice
+.Ed
+.Sh HASHES
+The password is compared against the hash the directory holds, by the same
+code
+.Xr ypstns 8
+links.
+That code carries its own SHA-256 crypt and SHA-512 crypt, because
+.Xr crypt 3
+on this system understands bcrypt and nothing else, and the hashes an STNS
+directory carries are almost always SHA-512 crypt - they are generally created
+on a Linux host.
+.Pp
+So
+.Ql $6$ ,
+.Ql $5$
+and
+.Ql $2b$
+all work here.
+Anything else is refused, and the refusal is logged as
+.Dq no usable password hash
+rather than as a wrong password, because an administrator whose users cannot
+log in needs to know which of the two it is.
+.Sh SECURITY
+.Bl -tag -width Ds
+.It Failure is always a rejection
+Every outcome that is not a positive match is a rejection: an unreachable API,
+a hash of a kind that cannot be read, a locked account, a name outside the
+character set STNS permits, a configuration that will not load.
+The caller is told the same thing in each case and the reason goes to
+.Xr syslogd 8 .
+.It An empty password is refused before it is hashed
+The hash of an empty string is a perfectly good hash, and an account that
+happened to hold one would otherwise be open to anybody who pressed return.
+.It The process is confined
+.Xr unveil 2
+reduces the filesystem to the resolver configuration, the trust store and
+whatever TLS material
+.Xr stns.conf 5
+names -
+.Xr stns.conf 5
+itself having already been read - and
+.Xr pledge 2
+reduces the rest to
+.Qq stdio rpath inet dns tty .
+Core dumps are turned off, because this process holds a password in memory for
+as long as it takes to hash it.
+.It Setuid root, as every style on this system is
+.Xr authenticate 3
+may be called by a program that is not root, and this has to read a
+.Xr stns.conf 5
+that may hold an API token and be readable by nobody else - so it is installed
+setuid root and group
+.Sy auth ,
+which is exactly how
+.Pa /usr/libexec/auth/login_passwd
+is installed and for the same reason.
+The confinement above is what keeps that honest: by the time anything of the
+caller's is looked at, the filesystem is four files and the process cannot
+execute, write, or open anything new.
+.It The password goes to the machine, not to the API
+Only the hash is fetched; the comparison happens here.
+The API is never sent a password and never asked whether one is correct.
+.El
+.Sh FILES
+.Bl -tag -width /usr/local/libexec/auth/login_stns -compact
+.It Pa /usr/local/libexec/auth/login_stns
+Where the port installs it.
+.It Pa /usr/libexec/auth/login_stns
+Where
+.Xr login 1
+looks for it; a symbolic link to the above.
+.It Pa /etc/stns/client/stns.conf
+The STNS API client configuration, shared with
+.Xr ypstns 8
+and
+.Xr stns-key-wrapper 8 .
+.It Pa /etc/login.conf
+Where the style is named.
+.El
+.Sh SEE ALSO
+.Xr login 1 ,
+.Xr su 1 ,
+.Xr authenticate 3 ,
+.Xr login.conf 5 ,
+.Xr stns.conf 5 ,
+.Xr stns-key-wrapper 8 ,
+.Xr ypstns 8
+.Sh AUTHORS
+.An zakinko Aq Mt zakinko@snowrabbit.org
+.Sh CAVEATS
+Authentication needs the API server, every time.
+There is no cached credential and there is deliberately no fallback to one: a
+password checked against something this machine remembered is a password
+checked against something that may since have been revoked.
+An account that has to work while the directory is unreachable wants a local
+entry in
+.Xr master.passwd 5 ,
+which
+.Cm auth=passwd,stns
+already prefers.

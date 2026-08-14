@@ -33,6 +33,7 @@ WORK=${WORK:-/tmp/ypstns_integration}
 
 MOCK=$SRCDIR/external/bsd/libstns/tests/mock_stns_server.py
 CLIENT=$SRCDIR/yp_client
+AUTH=$SRCDIR/auth_client
 
 checks=0
 failures=0
@@ -222,6 +223,7 @@ fi
 
 make -C "$SRCDIR" >"$WORK/build.log" 2>&1 || { cat "$WORK/build.log" >&2; exit 1; }
 make -C "$SRCDIR" yp_client >>"$WORK/build.log" 2>&1 || { cat "$WORK/build.log" >&2; exit 1; }
+make -C "$SRCDIR" auth_client >>"$WORK/build.log" 2>&1 || { cat "$WORK/build.log" >&2; exit 1; }
 
 mkdir -p /etc/stns/client
 cat >/etc/stns/client/stns.conf <<EOF
@@ -319,7 +321,7 @@ echo "== the privileged maps =="
 
 # Root, so yp_client binds a reserved port and is allowed the hash.
 check "master.passwd from a reserved port" "$CLIENT" "$DOMAIN" match master.passwd.byname stnshash <<'EOF'
-stnshash:$6$stnssalt$0123456789abcdef:1004:1001::0:0::/home/stnshash:/bin/sh
+stnshash:$6$stnssalt$OIMtoFferfvDRURYFOfno07xGCvtuODAKpR8zK4wOUL0oRwqKXqB6kv96hFKeeb9UCZTR40OaUBzAMP.QqIgi1:1004:1001::0:0::/home/stnshash:/bin/sh
 EOF
 
 # -5 is YP_BADDB.  Deliberately not YP_NOMAP: the map does exist, and telling a
@@ -487,6 +489,79 @@ else
 	echo "FAIL - the daemon died during the reload"
 	tail -20 "$WORK/ypstns.log"
 fi
+
+echo "== login_stns =="
+
+# The other half of the answer to "who is this": ypstns says what a user is,
+# and this says whether a password is theirs.  It is a separate program on a
+# separate mechanism, so it gets its own phase - and auth_client runs it the
+# way authenticate(3) does, over file descriptor 3, which is the only path
+# login(1) and su(1) ever take.
+#
+# The fixture's stnshash carries a real SHA-512 crypt hash of the password
+# below.  The comparison happens in libstns, whose own tests check the hashing
+# against published vectors; what is being checked here is the program around
+# it - the back channel, the confinement, and every way of saying no.
+check "the right password is authorized" \
+	"$AUTH" "$SRCDIR/login_stns" stnshash "correct horse battery staple" <<'EOF'
+authorize
+EOF
+check_status "and it exits zero" 0 \
+	"$AUTH" "$SRCDIR/login_stns" stnshash "correct horse battery staple"
+
+check "the wrong one is rejected" \
+	"$AUTH" "$SRCDIR/login_stns" stnshash "incorrect horse battery staple" <<'EOF'
+reject
+EOF
+check_status "and it exits non-zero" 1 \
+	"$AUTH" "$SRCDIR/login_stns" stnshash "incorrect horse battery staple"
+
+# An empty password is refused before it is hashed.  The hash of an empty
+# string is a perfectly good hash, and an account holding one must not be
+# open to anybody who presses return.
+check "an empty password is rejected" "$AUTH" "$SRCDIR/login_stns" stnshash "" <<'EOF'
+reject
+EOF
+
+# stnsuser's password field is empty, so the library stored "*".  A locked
+# account must not be opened by anything, including by typing the lock.
+check "a locked account is rejected" "$AUTH" "$SRCDIR/login_stns" stnsuser "anything" <<'EOF'
+reject
+EOF
+check "and not by its own lock string either" "$AUTH" "$SRCDIR/login_stns" stnsuser "*" <<'EOF'
+reject
+EOF
+
+# Reached for every local login on the machine, since the style is listed
+# after passwd - so it has to be quiet and quick about it rather than an error.
+check "a user the directory does not hold is rejected" \
+	"$AUTH" "$SRCDIR/login_stns" nosuchuser "anything" <<'EOF'
+reject
+EOF
+
+check "a name outside the character set is rejected" \
+	"$AUTH" "$SRCDIR/login_stns" "bad name" "anything" <<'EOF'
+reject
+EOF
+
+# There is no challenge to issue, and saying so silently is what stops login(1)
+# printing a prompt of its own for a style that only wants a password.
+check "the challenge service is silent" \
+	"$AUTH" -s challenge "$SRCDIR/login_stns" stnshash <<'EOF'
+reject silent
+EOF
+
+echo "== login_stns when the API is unreachable =="
+
+# It must refuse rather than fall back to anything, and it must not hang.  The
+# machine keeps working because login.conf lists passwd first; this style has
+# nothing to offer when the directory cannot be reached and says so.
+stop_stns
+check "an unreachable API is a rejection" \
+	"$AUTH" "$SRCDIR/login_stns" stnshash "correct horse battery staple" <<'EOF'
+reject
+EOF
+start_stns
 
 # The "+" line and ypbind have done their job.  Everything below restarts the
 # daemon, which changes the port it is registered on, and a bound ypbind with a

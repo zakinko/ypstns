@@ -44,8 +44,15 @@ find "$DEST" -type f -o -type l | sed "s,^$DEST,," | sort >"$WORK/staged"
 # What the packing list says, with the markers turned back into paths.  A line
 # ending in '/' is a directory and is not a file; @newuser and @comment are
 # instructions to pkg_add rather than contents.
+# @mode, @owner and @group set the attributes of the lines that follow and are
+# not contents themselves; a bare one of each resets it.  A '#' line is a
+# comment in the packing list.
 sed -e '/^@comment/d' \
     -e '/^@newuser/d' \
+    -e '/^@owner/d' \
+    -e '/^@group/d' \
+    -e '/^@mode/d' \
+    -e '/^#/d' \
     -e '/\/$/d' \
     -e "s,^@rcscript \${RCDIR},/etc/rc.d," \
     -e "s,^@bin ,$LOCALBASE/," \

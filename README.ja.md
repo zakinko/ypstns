@@ -175,6 +175,34 @@ pledge の無い別プログラムである `stns-key-wrapper` には効いた�
 ありません。自分の `ypbind(8)` とループバックで話すマシンには妥当な構成ですが、
 制御できないネットワークを越えるなら不適切です。
 
+## パスワード
+
+`ypstns` が答えるのは「誰か」です。「そのパスワードが本人のものか」は OpenBSD
+では BSD authentication という別の仕組みで問われ、それに答えるのが
+`login_stns` です。`login(1)`・`su(1)`・`sshd` すべてが `authenticate(3)`
+を呼び、同じ道を通るので、これ 1 つで全部に効きます。
+
+```sh
+doas ln -s /usr/local/libexec/auth/login_stns /usr/libexec/auth/login_stns
+```
+
+```text
+# /etc/login.conf
+stns:\
+	:auth=passwd,stns:\
+	:tc=default:
+```
+
+`passwd` が先で、この順序が安全性のすべてです。ローカルアカウントは API
+に問い合わせることなく `master.passwd` から答えられるので、ディレクトリに
+到達できなくても root はログインできます。
+
+比較はマシン側で行います。取得するのはハッシュだけで、**API にパスワードを
+送ることはありません**。`$6$`・`$5$`・`$2b$` が使えます。前 2 つを
+[libstns](https://github.com/zakinko/libstns) が自前で実装しているのは、ここの
+`crypt(3)` が bcrypt しか読めない一方、STNS のディレクトリはほぼ SHA-512 crypt
+を持っているからです。`login_stns(8)` を参照。
+
 ## SSH 鍵
 
 YP とは無関係です。`sshd` はコマンドを実行して出力を読むだけです。

@@ -1,6 +1,17 @@
 @comment SPDX-License-Identifier: BSD-2-Clause
 @rcscript ${RCDIR}/ypstns
 @bin bin/stns-key-wrapper
+# Setuid root and group auth, which is how every other authentication style on
+# the system is installed: authenticate(3) may be called by a program that is
+# not root, and this one has to read a stns.conf that may hold an API token.
+@owner root
+@group auth
+@mode 4555
+libexec/auth/login_stns
+@mode
+@group
+@owner
+@man man/man8/login_stns.8
 @man man/man5/ypstns.conf.5
 @man man/man8/stns-key-wrapper.8
 @man man/man8/ypstns.8

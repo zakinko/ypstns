@@ -35,7 +35,7 @@ jobs:
             uname -a
             echo "== build =="
             make
-            ls -l ypstns stns-key-wrapper
+            ls -l ypstns stns-key-wrapper login_stns
             echo "== unit tests and the configuration grammar =="
             make test
             echo "== the vendored code matches external/MANIFEST =="

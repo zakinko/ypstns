@@ -18,7 +18,7 @@
 
 PROG=		ypstns
 SRCS=		ypstns.c parse.y stnsclient.c maps.c yp.c yp_xdr.c
-MAN=		ypstns.8 ypstns.conf.5 stns-key-wrapper.8
+MAN=		ypstns.8 ypstns.conf.5 login_stns.8 stns-key-wrapper.8
 
 LIBSTNS=	${.CURDIR}/external/bsd/libstns
 LIBSTNS_SRC?=	${.CURDIR}/../libstns
@@ -43,6 +43,7 @@ RCDIR?=		/etc/rc.d
 
 # The library's sources, compiled here.
 SRCS+=		stns_config.c stns_request.c stns_entry.c stns_lookup.c stns_list.c
+SRCS+=		stns_crypt.c
 SRCS+=		parson.c toml.c
 
 .PATH:		${.CURDIR}/src ${.CURDIR}/man
@@ -77,7 +78,14 @@ DPADD+=		${LIBUTIL}
 # install: below.
 WRAPPER=	stns-key-wrapper
 
-all: ${WRAPPER}
+# The BSD authentication style.  login(1) looks for it by an absolute path
+# fixed in libc, /usr/libexec/auth/login_<style>, which is outside LOCALBASE
+# and so somewhere a port may not write.  It is installed under LOCALBASE and
+# symlinked into place by the administrator; login_stns(8) says so.
+LOGIN=		login_stns
+AUTHDIR?=	${LOCALBASE}/libexec/auth
+
+all: ${WRAPPER} ${LOGIN}
 
 ${WRAPPER}:
 	${CC} ${CFLAGS} ${CDIAGFLAGS} -o ${.TARGET} \
@@ -95,6 +103,20 @@ ${WRAPPER}:
 # them: in the base tree those directories are always already there.  A staged
 # install into an empty DESTDIR is the case where they are not, which is both
 # how a port builds and how tests/check_plist.sh checks the packing list.
+# Shares every object the daemon uses, and links against the same library.
+${LOGIN}:
+	${CC} ${CFLAGS} ${CDIAGFLAGS} -o ${.TARGET} \
+		${.CURDIR}/src/login_stns.c \
+		${LIBSTNS}/src/stns_config.c \
+		${LIBSTNS}/src/stns_request.c \
+		${LIBSTNS}/src/stns_entry.c \
+		${LIBSTNS}/src/stns_lookup.c \
+		${LIBSTNS}/src/stns_list.c \
+		${LIBSTNS}/src/stns_crypt.c \
+		${PARSON}/parson.c \
+		${TOMLC99}/toml.c \
+		${LDADD}
+
 beforeinstall:
 	${INSTALL} -d -o root -g wheel -m 755 ${DESTDIR}${BINDIR}
 	${INSTALL} -d -o root -g wheel -m 755 ${DESTDIR}${MANDIR}5
@@ -106,6 +128,8 @@ beforeinstall:
 		${DESTDIR}${EXAMPLESDIR}/stns.conf
 	${INSTALL} -d -o root -g wheel -m 755 ${DESTDIR}${WRAPPERDIR}
 	${INSTALL} -o root -g bin -m 555 ${WRAPPER} ${DESTDIR}${WRAPPERDIR}/${WRAPPER}
+	${INSTALL} -d -o root -g wheel -m 755 ${DESTDIR}${AUTHDIR}
+	${INSTALL} -o root -g auth -m 4555 ${LOGIN} ${DESTDIR}${AUTHDIR}/${LOGIN}
 	${INSTALL} -d -o root -g wheel -m 755 ${DESTDIR}${RCDIR}
 	${INSTALL} -o root -g wheel -m 555 ${.CURDIR}/etc/rc.d/ypstns \
 		${DESTDIR}${RCDIR}/ypstns
@@ -121,6 +145,12 @@ maps_test:
 	${CC} ${CFLAGS} ${CDIAGFLAGS} -o ${.TARGET} \
 		${.CURDIR}/tests/maps_test.c ${.CURDIR}/src/maps.c ${LDADD}
 
+# Runs an authentication style the way authenticate(3) does, for
+# tests/integration.sh: the interface is file descriptor 3 and there is no
+# shell incantation that provides one which is both readable and writable.
+auth_client:
+	${CC} ${CFLAGS} ${CDIAGFLAGS} -o ${.TARGET} ${.CURDIR}/tests/auth_client.c
+
 # Speaks YPPROG to a running daemon, for tests/integration.sh.  It links the
 # same yp_xdr.c the server does, which is the point: if the encoding were
 # wrong in a way both halves agreed on, ypmatch(1) would catch it, and
@@ -131,7 +161,7 @@ yp_client:
 
 # The daemon, actually running.  Needs root, and says so rather than failing
 # obscurely; see the comment at the top of the script.
-integration: ${PROG} yp_client
+integration: ${PROG} ${LOGIN} yp_client auth_client
 	sh ${.CURDIR}/tests/integration.sh
 
 # Check that the ident lines in the sample configurations survive git archive.
@@ -148,6 +178,6 @@ external:
 vendor:
 	sh ${.CURDIR}/tests/vendor_libstns.sh ${LIBSTNS_SRC}
 
-CLEANFILES+=	${WRAPPER} maps_test yp_client
+CLEANFILES+=	${WRAPPER} ${LOGIN} maps_test yp_client auth_client
 
 .include <bsd.prog.mk>

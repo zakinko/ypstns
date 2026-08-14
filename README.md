@@ -177,6 +177,34 @@ encryption at all. Everything above is making the best of that, not fixing it.
 It is a reasonable arrangement for a machine talking to its own `ypbind(8)` over
 the loopback and a poor one across a network you do not control.
 
+## Passwords
+
+`ypstns` answers who somebody is. Whether a password is theirs is a separate
+question on OpenBSD, asked through BSD authentication, and `login_stns` answers
+it — for `login(1)`, `su(1)`, `sshd` and everything else, because they all call
+`authenticate(3)` and it all goes the same way.
+
+```sh
+doas ln -s /usr/local/libexec/auth/login_stns /usr/libexec/auth/login_stns
+```
+
+```text
+# /etc/login.conf
+stns:\
+	:auth=passwd,stns:\
+	:tc=default:
+```
+
+`passwd` first, and the order is the whole of the safety: a local account is
+answered out of `master.passwd` without the API being asked, so root can still
+log in when the directory is unreachable.
+
+The comparison happens on the machine — only the hash is fetched, and the API
+is never sent a password. `$6$`, `$5$` and `$2b$` all work; the first two are
+implemented in [libstns](https://github.com/zakinko/libstns) because `crypt(3)`
+here does bcrypt and nothing else, while STNS directories almost always carry
+SHA-512 crypt. See `login_stns(8)`.
+
 ## SSH keys
 
 Nothing to do with YP — `sshd` runs a command and reads its output:
