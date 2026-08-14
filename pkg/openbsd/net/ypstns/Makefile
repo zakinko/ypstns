@@ -3,25 +3,24 @@
 # An OpenBSD port for ypstns, laid out the way /usr/ports expects so that it
 # can be dropped into net/ypstns and built there.
 #
-# The distfile is a release tarball rather than the archive GitHub generates
-# from a tag: libstns is a submodule, and a GitHub tag tarball contains the
-# submodule's directory and none of its contents, which would leave the port
-# with nothing to compile.  The release tarball is made with the submodule
-# unpacked in place, and distinfo below is generated from it in the usual way
-# with "make makesum".
+# The distfile is the archive GitHub generates from a tag.  libstns is
+# vendored into the repository under external/ rather than being a submodule,
+# precisely so that this can be an ordinary GH_ port with nothing to explain -
+# a tag tarball carries a submodule's directory and none of its contents.
 
 COMMENT =	serve an STNS directory to OpenBSD as YP
 
 V =		0.1.0
-DISTNAME =	ypstns-${V}
 CATEGORIES =	net
 
 HOMEPAGE =	https://github.com/zakinko/ypstns
 MAINTAINER =	zakinko <zakinko@snowrabbit.org>
 
-MASTER_SITES =	https://github.com/zakinko/ypstns/releases/download/v${V}/
+GH_ACCOUNT =	zakinko
+GH_PROJECT =	ypstns
+GH_TAGNAME =	v${V}
 
-# BSD-2-Clause, with MIT for the bundled parsers under libstns/external.
+# BSD-2-Clause, with MIT for the bundled parsers under external/mit.
 PERMIT_PACKAGE =	Yes
 
 WANTLIB =	c curl util

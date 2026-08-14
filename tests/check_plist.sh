@@ -18,7 +18,7 @@ WORK=${WORK:-/tmp/ypstns_plist}
 LOCALBASE=${LOCALBASE:-/usr/local}
 PLIST=$SRCDIR/pkg/openbsd/net/ypstns/pkg/PLIST
 
-# shellcheck disable=SC2317  # reached through the trap below
+# shellcheck disable=SC2317,SC2329  # reached through the trap below
 cleanup() {
 	rm -rf "$WORK"
 }

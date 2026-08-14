@@ -201,7 +201,7 @@ pledge しており、fetcher は `stns.conf` をもう一度読むための権�
 
 ```sh
 make test        # マップ処理と設定ファイル文法
-make external    # 同梱コードが libstns/external/MANIFEST と一致するか
+make external    # 同梱コードが external/MANIFEST と一致するか
 make ident       # サンプル設定の ident 行が git archive で展開されるか
 ```
 
@@ -232,6 +232,6 @@ BSD-2-Clause です。`parse.y` の字句解析とファイル処理は、すべ
 
 | | |
 | --- | --- |
-| [libstns](https://github.com/zakinko/libstns) | この下にある STNS API クライアント。submodule |
+| [libstns](https://github.com/zakinko/libstns) | この下にある STNS API クライアント。`external/` に vendor |
 | [nss_stns](https://github.com/zakinko/nss_stns) | NetBSD・FreeBSD・DragonFly 向け。`nsswitch(5)` モジュール |
 | [ldapstns](https://github.com/zakinko/ldapstns) | macOS 向け。Open Directory の裏の LDAPv3 サーバー |

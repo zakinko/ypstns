@@ -31,7 +31,7 @@ DOMAIN=${DOMAIN:-stnstest}
 PYTHON=${PYTHON:-python3}
 WORK=${WORK:-/tmp/ypstns_integration}
 
-MOCK=$SRCDIR/libstns/tests/mock_stns_server.py
+MOCK=$SRCDIR/external/bsd/libstns/tests/mock_stns_server.py
 CLIENT=$SRCDIR/yp_client
 
 checks=0

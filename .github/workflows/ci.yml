@@ -23,8 +23,6 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Build and test
         uses: vmactions/openbsd-vm@v1
@@ -40,7 +38,7 @@ jobs:
             ls -l ypstns stns-key-wrapper
             echo "== unit tests and the configuration grammar =="
             make test
-            echo "== bundled third party code =="
+            echo "== the vendored code matches external/MANIFEST =="
             make external
             echo "== manual pages =="
             # Two of mandoc's STYLE checks are for manuals kept in OpenBSD's
@@ -57,7 +55,7 @@ jobs:
             # "referenced manual not found" only means the runner has no manual
             # for something, which is true of ypstns itself until it is
             # installed.
-            for page in man/*.5 man/*.8 libstns/man/*.8; do
+            for page in man/*.5 man/*.8 external/bsd/libstns/man/*.8; do
               echo "-- $page"
               mandoc -T lint "$page" 2>&1 \
                 | grep -v 'referenced manual not found' \

@@ -203,7 +203,7 @@ is the answer for anything else.
 
 ```sh
 make test        # the map handling, and the configuration grammar
-make external    # the bundled copies still match libstns/external/MANIFEST
+make external    # the vendored copies still match external/MANIFEST
 make ident       # the sample configs' ident lines survive git archive
 ```
 
@@ -233,6 +233,6 @@ shared `parse.y` every OpenBSD daemon has, which is ISC. See `LICENSE`.
 
 | | |
 | --- | --- |
-| [libstns](https://github.com/zakinko/libstns) | the STNS API client underneath this, as a submodule |
+| [libstns](https://github.com/zakinko/libstns) | the STNS API client underneath this, vendored into `external/` |
 | [nss_stns](https://github.com/zakinko/nss_stns) | the same thing for NetBSD, FreeBSD and DragonFly, as an `nsswitch(5)` module |
 | [ldapstns](https://github.com/zakinko/ldapstns) | the same thing for macOS, as an LDAPv3 server behind Open Directory |

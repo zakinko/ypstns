@@ -9,16 +9,21 @@
 # modes, WARNINGS=Yes.  Run it with make(1); nothing here works with GNU make
 # and nothing needs to.
 #
-# libstns is a submodule and its sources are compiled straight into this
-# program rather than linked as a library.  That is how all three STNS clients
-# use it, and it keeps the flags - LOCALBASE, STNS_PRODUCT, STNS_CONFDIR - this
-# repository's business rather than the library's.
+# libstns is vendored under external/ rather than being a submodule, and its
+# sources are compiled straight into this program rather than linked as a
+# library.  That keeps the flags - LOCALBASE, STNS_PRODUCT, STNS_CONFDIR - this
+# repository's business rather than the library's, and it keeps a release
+# tarball self-contained, which is what the port needs.  "make vendor"
+# refreshes the copy; see tests/vendor_libstns.sh.
 
 PROG=		ypstns
 SRCS=		ypstns.c parse.y stnsclient.c maps.c yp.c yp_xdr.c
 MAN=		ypstns.8 ypstns.conf.5 stns-key-wrapper.8
 
-LIBSTNS=	${.CURDIR}/libstns
+LIBSTNS=	${.CURDIR}/external/bsd/libstns
+LIBSTNS_SRC?=	${.CURDIR}/../libstns
+PARSON=		${.CURDIR}/external/mit/parson
+TOMLC99=	${.CURDIR}/external/mit/tomlc99
 LOCALBASE?=	/usr/local
 SYSCONFDIR?=	/etc
 
@@ -42,12 +47,12 @@ SRCS+=		parson.c toml.c
 
 .PATH:		${.CURDIR}/src ${.CURDIR}/man
 .PATH:		${LIBSTNS}/src ${LIBSTNS}/man
-.PATH:		${LIBSTNS}/external/mit/parson ${LIBSTNS}/external/mit/tomlc99
+.PATH:		${PARSON} ${TOMLC99}
 
 CFLAGS+=	-I${.CURDIR}/src -I${.OBJDIR} \
 		-I${LIBSTNS}/src \
-		-I${LIBSTNS}/external/mit/parson \
-		-I${LIBSTNS}/external/mit/tomlc99 \
+		-I${PARSON} \
+		-I${TOMLC99} \
 		-I${LOCALBASE}/include \
 		-DSTNS_PRODUCT=\"ypstns\" \
 		-DSTNS_CONFDIR=\"${SYSCONFDIR}\"
@@ -82,8 +87,8 @@ ${WRAPPER}:
 		${LIBSTNS}/src/stns_entry.c \
 		${LIBSTNS}/src/stns_lookup.c \
 		${LIBSTNS}/src/stns_list.c \
-		${LIBSTNS}/external/mit/parson/parson.c \
-		${LIBSTNS}/external/mit/tomlc99/toml.c \
+		${PARSON}/parson.c \
+		${TOMLC99}/toml.c \
 		${LDADD}
 
 # bsd.prog.mk and bsd.man.mk install into their directories but do not create
@@ -133,9 +138,15 @@ integration: ${PROG} yp_client
 ident:
 	sh ${.CURDIR}/tests/check_ident.sh
 
-# Check the bundled third party code against libstns/external/MANIFEST.
+# Check the vendored code under external/ against external/MANIFEST.  Add
+# --upstream and it also asks github whether the recorded revisions are still
+# current, which needs the network.
 external:
-	sh ${LIBSTNS}/tests/check_external.sh
+	sh ${.CURDIR}/tests/check_external.sh
+
+# Refresh the vendored copy of libstns from a checkout of it.
+vendor:
+	sh ${.CURDIR}/tests/vendor_libstns.sh ${LIBSTNS_SRC}
 
 CLEANFILES+=	${WRAPPER} maps_test yp_client
 
