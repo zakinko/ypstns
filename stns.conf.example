@@ -1,0 +1,81 @@
+# $SNOWRABBIT: stns.conf,v $Format:%h %cs %an$ Exp $
+
+# client configuration for the STNS API, as read by ypstns and by
+# stns-key-wrapper.  This is the same file the Linux client uses and the same
+# one nss_stns reads on the other BSDs; a copy from an existing host works
+# here unchanged.
+# A key not listed below is reported to syslog and otherwise ignored, so a
+# misspelling does not quietly leave you talking to localhost.
+
+# Install this as /etc/stns/client/stns.conf.
+#
+# ypstns reads it once, in the fetcher, before that process gives up root -
+# so unlike on a machine using nss_stns, where every process resolving a name
+# has to be able to read this file, here it can be mode 600 with a token in it.
+# stns-key-wrapper is the exception: it runs as whoever sshd_config's
+# AuthorizedKeysCommandUser says, and needs to be able to read it too.  Run
+# cache-stnsd and use [cached] if that is a problem.
+
+# Base URL of the STNS API, including the version prefix.
+api_endpoint = "http://localhost:1104/v1"
+
+# Authentication.  Either a token (sent as "Authorization: token <value>")
+# or HTTP basic auth; leave both out for an unauthenticated server.
+#auth_token = "xxxxxxxxxxxxxxxx"
+#user       = "stns"
+#password   = "secret"
+
+# Extra request headers.
+#[http_headers]
+#X-Api-Key = "xxxxxxxx"
+
+# TLS.  ssl_verify may be turned off for a self signed server, but supplying
+# tls.ca is the better answer.  Any file named here is unveil(2)ed by the
+# fetcher, so a path added later needs a restart rather than a reload.
+#ssl_verify = true
+#[tls]
+#ca   = "/etc/stns/client/ca.pem"
+#cert = "/etc/stns/client/client.pem"
+#key  = "/etc/stns/client/client-key.pem"
+
+#http_proxy    = "http://proxy.example.com:8080"
+#http_location = false
+
+# Request behaviour.  request_locktime is the circuit breaker: after a
+# connection failure no further requests are attempted for this many seconds.
+#request_timeout  = 10
+#request_retry    = 3
+#request_locktime = 60
+
+# On-disk response cache.
+#
+# ypstns turns this off in the fetcher whatever is written here, and does not
+# read it back: the daemon already holds the whole directory in memory and
+# refreshes it on its own interval, so the cache would be a second and staler
+# copy of something already there - and keeping it would mean the fetcher
+# needed wpath and cpath in its pledge(2) for the sake of a copy nothing reads.
+# The setting still applies to stns-key-wrapper, which is a separate program.
+#cache              = true
+#cache_dir          = "/var/db/stns"
+#cache_ttl          = 600
+#negative_cache_ttl = 10
+
+# Talk to cache-stnsd over its unix socket instead of the API directly.
+# When enabled, the daemon owns the credentials and the local cache, and the
+# fetcher's pledge(2) gains "unix" so that it can reach the socket.
+#[cached]
+#enable      = false
+#unix_socket = "/var/run/cache-stnsd.sock"
+
+# Offset every id coming from the API, to keep it clear of local accounts.
+#uid_shift = 0
+#gid_shift = 0
+
+# Hand the query to an external command rather than speaking HTTP.
+# Note that the fetcher is pledged without "exec", so this works for
+# stns-key-wrapper and not for the daemon.
+#query_wrapper = "/usr/local/bin/stns-query-wrapper"
+
+# stns-key-wrapper also emits the output of this command, which makes it
+# possible to migrate from another AuthorizedKeysCommand gradually.
+#chain_ssh_wrapper = "/usr/local/bin/other-key-command"

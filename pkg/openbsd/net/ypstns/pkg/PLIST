@@ -1,0 +1,11 @@
+@comment SPDX-License-Identifier: BSD-2-Clause
+@rcscript ${RCDIR}/ypstns
+@bin bin/stns-key-wrapper
+@man man/man5/ypstns.conf.5
+@man man/man8/stns-key-wrapper.8
+@man man/man8/ypstns.8
+@bin sbin/ypstns
+share/examples/ypstns/
+share/examples/ypstns/stns.conf
+share/examples/ypstns/ypstns.conf
+@newuser _ypstns:783:783:daemon:ypstns account:/nonexistent:/sbin/nologin

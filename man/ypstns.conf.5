@@ -1,0 +1,141 @@
+.\"	$SNOWRABBIT: ypstns.conf.5,v $Format:%h %cs %an$ Exp $
+.\"
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\"
+.\" Copyright (c) 2026 zakinko
+.\"
+.Dd August 13, 2026
+.Dt YPSTNS.CONF 5
+.Os
+.Sh NAME
+.Nm ypstns.conf
+.Nd configuration file for ypstns
+.Sh DESCRIPTION
+.Nm
+holds the settings of
+.Xr ypstns 8
+itself.
+Everything about the STNS API - where it is, how to authenticate to it, how
+long to wait for it - is in
+.Xr stns.conf 5
+instead, which is read by
+.Xr stns-key-wrapper 8
+as well and can be copied unchanged from any other machine running an STNS
+client.
+.Pp
+The file must not be group writable or readable by anybody but its owner;
+.Xr ypstns 8
+refuses to read one that is.
+It names no secret of its own, but every other daemon on the system makes this
+check and an administrator who adds one later should not have to discover that
+this file was the exception.
+.Sh SYNTAX
+The syntax is the one shared by the daemons in the base system.
+.Pp
+A
+.Sq #
+begins a comment and runs to the end of the line.
+A backslash at the end of a line continues it.
+An argument containing whitespace must be quoted.
+.Pp
+Macros are set as
+.Ic name Ns = Ns Ar value
+and expanded as
+.Ic $name :
+.Bd -literal -offset indent
+dom = "stns"
+domain $dom
+.Ed
+.Pp
+.Ic include Ar file
+reads another file at that point.
+.Sh SETTINGS
+.Bl -tag -width Ds
+.It Ic domain Ar name
+The YP domain to serve.
+Required, with no default.
+.Pp
+A client asks for a domain by name, so a server that guessed the name would
+simply never be asked anything, and there is no useful guess to make.
+It must match what
+.Xr domainname 1
+reports on the machines that will use it, which
+.Xr rc.conf.local 8
+sets from
+.Pa /etc/defaultdomain .
+It has nothing to do with DNS and need not resemble a hostname.
+.It Ic interval Ar seconds
+How often to re-read the directory from the API.
+Between 10 and 86400; the default is 60.
+.Pp
+The fetch happens in a separate process and never blocks a lookup, so this
+trades freshness against load on the API server and nothing else.
+.Dq rcctl reload ypstns
+asks for one immediately.
+.It Ic user Ar name
+The account the fetcher runs as.
+The default is
+.Sy _ypstns .
+.Pp
+It is the process that holds a connection to the API and nothing else.
+The half of the daemon that answers the RPC stays root; see the
+.Sx SECURITY
+section of
+.Xr ypstns 8
+for why it has to.
+.It Ic allow Ar address Ns Op / Ns Ar prefix
+.It Ic allow Ic any
+Who may ask.
+.Pp
+By default the answer is this machine and nothing else.
+.Xr ypstns 8
+is nearly always run beside the
+.Xr ypbind 8
+that consumes it, and a YP server reachable from the network hands the whole
+directory to anybody who can guess the domain name.
+.Pp
+.Ic allow
+may be given more than once, and each one adds an IPv4 address or network to
+the loopback that is always permitted.
+.Ic allow any
+turns the check off altogether and cannot be combined with a specific network -
+saying both is a contradiction, and it is reported rather than resolved by
+whichever came last.
+.Pp
+Only IPv4.
+The YP protocol is Sun RPC over IPv4 and libc's YP client will not ask over
+anything else, so an IPv6 entry could never match and would be a promise this
+daemon cannot keep.
+.El
+.Sh FILES
+.Bl -tag -width /usr/local/share/examples/ypstns/ypstns.conf -compact
+.It Pa /etc/ypstns.conf
+The default location.
+.It Pa /etc/stns/client/stns.conf
+The STNS API client configuration.
+.It Pa /usr/local/share/examples/ypstns/ypstns.conf
+A commented sample.
+.El
+.Sh EXAMPLES
+The whole file, for a machine serving only itself:
+.Bd -literal -offset indent
+domain "stns"
+.Ed
+.Pp
+A server for a small network, checked every five minutes:
+.Bd -literal -offset indent
+domain   "example"
+interval 300
+allow    192.0.2.0/24
+.Ed
+.Pp
+Check it before installing it:
+.Bd -literal -offset indent
+$ ypstns -n -f ./ypstns.conf
+.Ed
+.Sh SEE ALSO
+.Xr stns.conf 5 ,
+.Xr stns-key-wrapper 8 ,
+.Xr ypstns 8
+.Sh AUTHORS
+.An zakinko Aq Mt zakinko@snowrabbit.org

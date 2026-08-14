@@ -1,0 +1,22 @@
+#!/bin/ksh
+#
+#	$SNOWRABBIT: ypstns,v $Format:%h %cs %an$ Exp $
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+daemon="/usr/local/sbin/ypstns"
+
+. /etc/rc.d/rc.subr
+
+# The daemon calls daemon(3) itself and forks a fetcher, so what is left in the
+# process table is not the command line rc.subr would otherwise look for.  The
+# privileged half sets its title to "[priv]", which is what this matches; the
+# fetcher calls itself "stnsclient" and is deliberately not matched, because it
+# is the parent that owns the service.
+pexp="ypstns: \[priv\].*"
+
+# rcctl reload sends SIGHUP, which asks the fetcher for a new copy of the
+# directory at once instead of waiting out the interval.  It does not re-read
+# ypstns.conf: see the RELOADING section of ypstns(8) for why not.
+
+rc_cmd $1

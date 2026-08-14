@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # The VM image and its package set drift underneath us, and so does OpenBSD
+  # itself twice a year - imsg(3) was renamed once already - so build and test
+  # on a schedule as well, not only when something here changes.
+  schedule:
+    - cron: '43 5 * * 1'
+  workflow_dispatch:
+
+jobs:
+  openbsd:
+    name: OpenBSD
+    runs-on: ubuntu-latest
+    # Bounded, because the integration test puts a "+" line in
+    # /etc/master.passwd for a moment.  If the daemon were ever to stop
+    # answering while that line is in place, every name lookup in the VM would
+    # block, and a job with no limit would sit there until the six hour
+    # default ran out.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build and test
+        uses: vmactions/openbsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg_add -I curl python3
+          run: |
+            set -e
+            uname -a
+            echo "== build =="
+            make
+            ls -l ypstns stns-key-wrapper
+            echo "== unit tests and the configuration grammar =="
+            make test
+            echo "== bundled third party code =="
+            make external
+            echo "== manual pages =="
+            # Two of mandoc's STYLE checks are for manuals kept in OpenBSD's
+            # own CVS tree and are filtered out here.
+            #
+            #   Mdocdate missing  wants ".Dd $Mdocdate$", a CVS keyword.  This
+            #                     repository is git, where it would sit in the
+            #                     released tarball unexpanded for ever.
+            #   RCS id missing    wants a "$OpenBSD$" tag.  These files carry a
+            #                     $SNOWRABBIT$ one, substituted by git archive;
+            #                     claiming the other would be a lie about where
+            #                     the file comes from.
+            #
+            # "referenced manual not found" only means the runner has no manual
+            # for something, which is true of ypstns itself until it is
+            # installed.
+            for page in man/*.5 man/*.8 libstns/man/*.8; do
+              echo "-- $page"
+              mandoc -T lint "$page" 2>&1 \
+                | grep -v 'referenced manual not found' \
+                | grep -v 'Mdocdate missing' \
+                | grep -v 'RCS id missing' > lint.out || true
+              cat lint.out
+              test ! -s lint.out
+            done
+            echo "== the packing list matches the install =="
+            sh tests/check_plist.sh
+            echo "== the rc script parses =="
+            ksh -n etc/rc.d/ypstns
+            echo "== the daemon, actually running =="
+            PYTHON=$(ls /usr/local/bin/python3.[0-9]* 2>/dev/null | head -1)
+            test -n "$PYTHON" || { echo "no python3 found" >&2; exit 1; }
+            PYTHON="$PYTHON" make integration
+
+  # Runs on the host: it needs git, which the VM image does not have, and the
+  # answer is the same wherever it is asked.
+  ident:
+    name: ident lines
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: sh tests/check_ident.sh
+
+  shellcheck:
+    name: shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck -s sh tests/*.sh

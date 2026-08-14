@@ -1,0 +1,51 @@
+# $SNOWRABBIT: ypstns.conf,v $Format:%h %cs %an$ Exp $
+
+# configuration for ypstns(8) itself.
+#
+# Everything about the STNS API - where it is, how to authenticate to it, how
+# long to wait for it - is in /etc/stns/client/stns.conf, not here.  What is
+# here is only what has no meaning outside this daemon.
+#
+# The syntax is the one every other daemon on this system uses: '#' begins a
+# comment, a backslash continues a line, $macros are expanded, and "include"
+# reads another file.  ypstns -n reads this file, says what it made of it, and
+# exits, which is worth doing before rcctl restart.
+#
+# Install it as /etc/ypstns.conf.  It must not be group or world writable.
+
+# The YP domain to serve.  Required: there is no sensible default, because a
+# client asks for a domain by name and a server that guessed would simply
+# never be asked anything.
+#
+# It has to match what domainname(1) says on this machine, which rc.conf.local
+# should be setting from /etc/defaultdomain.  It has nothing to do with DNS and
+# need not resemble a hostname.
+domain "stns"
+
+# How often to re-read the directory from the API, in seconds.  Ten is the
+# minimum, a day is the maximum, and the default is 60.
+#
+# A refresh happens in the fetcher and never blocks a lookup, so this trades
+# freshness against load on the API server and nothing else.  rcctl reload
+# ypstns asks for one immediately.
+#interval 60
+
+# The unprivileged user the fetcher runs as.  It is the account that holds an
+# open connection to the API and nothing else; the half of the daemon that
+# serves YP stays root, because master.passwd.byname exists.
+#user "_ypstns"
+
+# Who may ask.
+#
+# By default, this machine and nothing else.  ypstns is nearly always run
+# beside the ypbind(8) that consumes it, and a YP server reachable from the
+# network hands the whole directory - names, ids, home directories, and the
+# password hashes to anything on a reserved port - to anybody who can guess the
+# domain name, which is not a secret and never was.
+#
+# Name the networks that may ask, one per line:
+#allow 192.0.2.0/24
+#allow 198.51.100.7
+#
+# or turn the check off entirely, which has to be said in words:
+#allow any

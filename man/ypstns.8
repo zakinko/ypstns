@@ -1,0 +1,334 @@
+.\"	$SNOWRABBIT: ypstns.8,v $Format:%h %cs %an$ Exp $
+.\"
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\"
+.\" Copyright (c) 2026 zakinko
+.\"
+.Dd August 13, 2026
+.Dt YPSTNS 8
+.Os
+.Sh NAME
+.Nm ypstns
+.Nd serve an STNS directory as YP
+.Sh SYNOPSIS
+.Nm
+.Op Fl dnv
+.Op Fl D Ar macro Ns = Ns Ar value
+.Op Fl f Ar file
+.Sh DESCRIPTION
+.Nm
+is a YP server that answers out of an
+.Lk https://stns.jp/ STNS
+API server, so that
+.Xr getpwnam 3 ,
+.Xr getgrent 3
+and everything built on them resolve users and groups from a directory rather
+than from
+.Xr master.passwd 5 .
+.Pp
+.Ox
+has no
+.Xr nsswitch.conf 5
+and no pluggable directory backend of any other kind.
+What it has is YP, which libc has spoken since forever and which
+.Xr getpwnam 3
+consults whenever
+.Pa /etc/master.passwd
+holds a
+.Sq +
+line.
+That is the same reason
+.Xr ypldap 8
+is in the base system, and
+.Nm
+is built the same way for the same reasons.
+.Pp
+It runs as two processes.
+The privileged one holds the maps and answers the RPC; it stays root because
+.Sy master.passwd.byname
+exists and serving it correctly means knowing whether the request came from a
+reserved port.
+The other runs as
+.Sy _ypstns
+behind
+.Xr unveil 2
+and
+.Xr pledge 2 ,
+does the HTTP, and sends finished map entries back over a pipe.
+Neither can do the other's job, and the privileged one parses nothing: the RPC
+decoding is libc's and the text of the maps is assembled by the fetcher.
+.Pp
+The options are as follows:
+.Bl -tag -width Ds
+.It Fl D Ar macro Ns = Ns Ar value
+Set
+.Ar macro
+to
+.Ar value
+before reading the configuration file.
+.It Fl d
+Do not daemonize, and write every log line to standard error as well.
+.It Fl f Ar file
+Read
+.Ar file
+instead of
+.Pa /etc/ypstns.conf .
+.It Fl n
+Read the configuration, print what was made of it, and exit.
+Needs no privileges, which is the point: it is meant to be run on a file before
+it is installed.
+.It Fl v
+Log more.
+Give it twice to hear about macros that were set and never used.
+.El
+.Ss Setting it up
+.Nm
+provides the server half only.
+The client half is
+.Xr ypbind 8 ,
+in the base system, and the machine has to be told to consult it:
+.Bd -literal -offset indent
+# echo stns > /etc/defaultdomain
+# domainname stns
+# echo '+:*::::::::' >> /etc/master.passwd
+# echo '+:*::' >> /etc/group
+# pwd_mkdb /etc/master.passwd
+.Ed
+.Pp
+The
+.Sq +
+lines are what make libc ask YP at all, and their position in the file is their
+position in the search: local accounts come first and keep working when the API
+server does not.
+.Pp
+Then write
+.Xr ypstns.conf 5 ,
+check it, and start both daemons:
+.Bd -literal -offset indent
+# ypstns -n
+# rcctl enable portmap ypstns ypbind
+# rcctl start portmap ypstns ypbind
+.Ed
+.Pp
+.Xr portmap 8
+has to be running first:
+.Nm
+registers with it, and cannot serve anything if it is absent.
+.Ss Checking it
+.Bd -literal -offset indent
+$ ypwhich
+$ ypcat passwd
+$ ypmatch alice passwd
+$ getent passwd alice
+$ id alice
+.Ed
+.Pp
+.Xr ypcat 1
+and
+.Xr ypmatch 1
+ask the server directly and
+.Xr getent 1
+goes through libc, which is the distinction worth having when something is
+wrong: an answer from the first and not the second means the
+.Sq +
+lines or
+.Xr ypbind 8
+rather than this daemon.
+.Pp
+.Xr yppoll 8
+prints the order number of a map, which here is the time the directory was last
+fetched - the one place to see how stale what is being served actually is.
+.Ss Maps
+.Bl -tag -width master.passwd.byname -compact
+.It Sy passwd.byname
+.It Sy passwd.byuid
+The directory with the password field masked to
+.Sq * .
+.It Sy master.passwd.byname
+.It Sy master.passwd.byuid
+The same, with the hash as the API served it.
+Answered only to a request from a reserved port; see
+.Sx SECURITY
+below.
+.It Sy group.byname
+.It Sy group.bygid
+.It Sy netid.byname
+Every group id a user holds, as
+.Ql unix.<uid>@<domain> .
+.It Sy ypservers
+This machine.
+.El
+.Pp
+.Sy YPPROC_XFR
+and
+.Sy YPPROC_CLEAR
+are refused.
+Both belong to a world with map transfers in it, and there is no
+.Xr dbm 3
+file here to push or to reopen - the maps come from an HTTP API on a timer, so
+honouring them would have
+.Xr yppush 8
+report a success that did not happen.
+There are no slave servers.
+.Ss SSH keys
+.Xr stns-key-wrapper 8
+is installed alongside and has nothing to do with YP:
+.Xr sshd 8
+runs a command and reads its output.
+.Bd -literal -offset indent
+AuthorizedKeysCommand     /usr/local/bin/stns-key-wrapper
+AuthorizedKeysCommandUser nobody
+.Ed
+.Sh SECURITY
+.Bl -tag -width Ds
+.It YP is IPv4, the API need not be
+Sun RPC over anything but IPv4 is not something libc's YP client will ask for,
+so the service and the
+.Ic allow
+list in
+.Xr ypstns.conf 5
+are both IPv4 and an IPv6 entry there would be a promise this daemon cannot
+keep.
+The API the fetcher talks to is an ordinary HTTP endpoint and is under no such
+constraint: an
+.Ic api_endpoint
+of
+.Ql http://[::1]:1104/v1
+works as well as any other.
+.It The directory is not served to the network by default
+Only this machine, plus whatever
+.Ic allow
+names in
+.Xr ypstns.conf 5 .
+.Nm
+is nearly always run beside the
+.Xr ypbind 8
+that consumes it, and a YP server reachable from the network hands the whole
+directory to anybody who can guess the domain name - which is not a secret and
+never was.
+.It The hashes need a reserved port
+.Sy master.passwd.byname
+and
+.Sy master.passwd.byuid
+are answered only when the request came from a port below 1024.
+.Xr ypserv 8
+makes the same distinction, and it is the only thing between an ordinary user
+on a client machine and every hash in the directory.
+It is a sound claim over the loopback and a weak one over a network, which is
+the other reason for the paragraph above.
+.It The fetcher is confined
+It runs as
+.Sy _ypstns ,
+after
+.Xr unveil 2
+has reduced the filesystem to the resolver configuration, the trust store and
+whatever TLS material
+.Xr stns.conf 5
+names, and after
+.Xr pledge 2
+has reduced it to
+.Qq stdio rpath inet dns .
+The server half is pledged to
+.Qq stdio inet proc :
+by the time it starts serving it will never open a file again, and the only
+thing
+.Qq proc
+buys it is the
+.Xr kill 2
+that passes a signal on to the fetcher.
+.It Two settings in stns.conf do not apply
+.Ic query_wrapper
+runs a command, and the fetcher is pledged without
+.Qq exec ;
+it is ignored, with a line in the log, rather than aborting the process the
+first time a refresh comes round.
+The on-disk cache is turned off, because the daemon already holds the whole
+directory and keeping a second, staler copy would cost
+.Qq wpath cpath
+for something nothing reads.
+Both still apply to
+.Xr stns-key-wrapper 8 ,
+which is a separate program with no pledge.
+.El
+.Sh RELOADING
+.Bl -tag -width Ds
+.It Dv SIGHUP
+Fetch the directory again at once, rather than waiting out
+.Ic interval .
+.Dq rcctl reload ypstns
+sends it.
+.Pp
+It does
+.Em not
+re-read the configuration.
+The server half has pledged not to open a file again, and the fetcher gave up
+the privileges it would need to read
+.Xr stns.conf 5
+a second time - which is the point of both, and is why
+.Dq rcctl restart ypstns
+is the answer for anything else.
+.It Dv SIGTERM , Dv SIGINT
+Deregister from
+.Xr portmap 8 ,
+stop the fetcher and exit.
+.El
+.Sh FILES
+.Bl -tag -width /usr/local/share/examples/ypstns -compact
+.It Pa /etc/ypstns.conf
+This daemon's configuration.
+.It Pa /etc/stns/client/stns.conf
+The STNS API client configuration, shared with
+.Xr stns-key-wrapper 8 .
+.It Pa /etc/rc.d/ypstns
+.It Pa /usr/local/share/examples/ypstns
+Commented samples of both files.
+.El
+.Sh EXIT STATUS
+.Ex -std
+.Pp
+.Nm
+does not begin serving, and does not register with
+.Xr portmap 8 ,
+until the first fetch has succeeded.
+A YP server that answers
+.Sy YP_NOMAP
+while it is starting tells its clients
+.Sy passwd.byname
+does not exist, and a client that believes that is a machine nobody can log in
+to; being absent for a moment is the better failure.
+For the same reason a later fetch that fails changes nothing - the previous
+directory keeps being served.
+.Sh EXAMPLES
+Check a configuration file before installing it, as an ordinary user:
+.Bd -literal -offset indent
+$ ypstns -n -f ./ypstns.conf
+.Ed
+.Pp
+Watch it work, without daemonizing:
+.Bd -literal -offset indent
+# ypstns -d -v
+.Ed
+.Sh SEE ALSO
+.Xr ypcat 1 ,
+.Xr ypmatch 1 ,
+.Xr ypwhich 1 ,
+.Xr pledge 2 ,
+.Xr unveil 2 ,
+.Xr getpwnam 3 ,
+.Xr stns.conf 5 ,
+.Xr ypstns.conf 5 ,
+.Xr portmap 8 ,
+.Xr stns-key-wrapper 8 ,
+.Xr ypbind 8 ,
+.Xr ypldap 8 ,
+.Xr yppoll 8
+.Sh AUTHORS
+.An zakinko Aq Mt zakinko@snowrabbit.org
+.Sh CAVEATS
+YP is a protocol from 1985 with no authentication worth the name and no
+encryption at all.
+Everything above about reserved ports and access lists is making the best of
+that, not fixing it.
+It is a reasonable arrangement on a machine talking to its own
+.Xr ypbind 8
+over the loopback and a poor one across a network you do not control.

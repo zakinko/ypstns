@@ -1,0 +1,19 @@
+# git has no per-file revision number, so an RCS style ident line cannot be
+# expanded the way cvs(1) expanded $OpenBSD$.  export-subst is the one
+# mechanism that needs no per-clone setup: git archive substitutes the
+# $Format:...$ placeholders when it builds a tarball, which is exactly what an
+# OpenBSD port fetches and unpacks.  A plain checkout shows the placeholder
+# unexpanded; tests/check_ident.sh keeps the substitution honest.
+#
+# The sources carry the same line, so that a file copied out of a release
+# tarball still says which revision it came from.
+stns.conf.example export-subst
+ypstns.conf.example export-subst
+Makefile export-subst
+src/*.c export-subst
+src/*.h export-subst
+src/*.y export-subst
+man/*.5 export-subst
+man/*.8 export-subst
+tests/*.c export-subst
+etc/rc.d/ypstns export-subst

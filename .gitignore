@@ -1,0 +1,17 @@
+# Anchored with a leading slash, all of them.
+#
+# An unanchored "ypstns" matches every path component of that name, which is
+# the binary at the top - and also etc/rc.d/ypstns and the whole of
+# pkg/openbsd/net/ypstns.  Both were silently absent from the first commit,
+# and the first thing to notice was the packaging check in CI, which is rather
+# later than one would like.
+*.o
+*.core
+/ypstns
+/stns-key-wrapper
+/maps_test
+/parse.c
+/y.tab.h
+/obj
+__pycache__/
+*.pyc

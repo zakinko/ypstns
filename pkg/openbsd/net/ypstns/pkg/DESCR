@@ -1,0 +1,17 @@
+ypstns is a YP server that answers out of an STNS API server, so that
+getpwnam(3), getgrent(3) and everything built on them resolve users and
+groups from a directory rather than from master.passwd.
+
+OpenBSD has no nsswitch.conf and no pluggable directory backend of any
+other kind.  What it has is YP, which libc has spoken since forever and
+which getpwnam(3) consults whenever /etc/master.passwd holds a "+" line.
+That is the same reason ypldap(8) is in the base system, and ypstns is
+built the same way: a privileged process that holds the maps and answers
+the RPC, and an unprivileged one behind unveil(2) and pledge(2) that does
+the HTTP and passes finished map entries back over a pipe.
+
+The directory is not served to the network unless it is asked for, and
+the master.passwd maps are answered only to a client on a reserved port.
+
+stns-key-wrapper is installed alongside, for sshd_config's
+AuthorizedKeysCommand.
